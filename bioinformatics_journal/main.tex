@@ -1,0 +1,285 @@
+\documentclass{bioinfo}
+\copyrightyear{2019} \pubyear{2019}
+
+\access{Advance Access Publication Date: 31 August 2019}
+\appnotes{Manuscript Category}
+
+\begin{document}
+\firstpage{1}
+
+\subtitle{Sequence analysis}
+
+\title[Tool recommender in Galaxy]{Tool recommender system in Galaxy using deep learning}
+\author[Sample \textit{et~al}.]{Anup Kumar, Bj\"orn Gr\"uning and Rolf Backofen}
+\address{BioInformatics group, University of Freiburg, Freiburg, 79110, Germany} 
+
+\corresp{$^\ast$To whom correspondence should be addressed.}
+
+\history{Received on XXXXX; revised on XXXXX; accepted on XXXXX}
+
+\editor{Associate Editor: XXXXXXX}
+
+\abstract{\textbf{Motivation:} Galaxy is a web-based and open-source scientific data-processing platform. Researchers compose pipelines in Galaxy to analyse scientific data. These pipelines, also known as workflows, can be complex and difficult to create from thousands of tools, especially for researchers new to Galaxy. To make creating workflows easier, faster and less error-prone, a predictive system is developed to recommend tools facilitating further analysis.\\
+\textbf{Results:} A model is created to recommend tools by analysing workflows, composed by researchers on the European Galaxy server, using a deep learning approach. The higher-order dependencies in workflows, represented as directed acyclic graphs, are learned by training a gated recurrent units (GRU) neural network, a variant of a recurrent neural network (RNN).
+The weights of tools used in the neural network training are derived from their usage frequencies over a period of time. The hyperparameters of the neural network are optimised using Bayesian optimisation. An accuracy of 98\% in predicting tools is achieved by the model and is accessed by a Galaxy API to recommend tools in real-time. Multiple user interface (UI) integrations on the server communicate with this API to apprise researchers of these recommended tools in an interactive manner.\\
+\textbf{Availability:} The project files and workflows are available online (https://github.com/anuprulez/
+similar\_galaxy\_workflow/tree/tool\_recommendation\_release\_19\_09). In addition, a tool is created in Galaxy to create the recommendation model (https://toolshed.g2.bx.psu.edu/repos/
+bgruening/create\_tool\_recommendation\_model).
+\\
+\textbf{Contact:} \href{kumara@informatik.uni-freiburg.de}{kumara@informatik.uni-freiburg.de}\\
+\href{gruening@informatik.uni-freiburg.de}{gruening@informatik.uni-freiburg.de}\\
+\href{backofen@informatik.uni-freiburg.de}{backofen@informatik.uni-freiburg.de}\\
+\textbf{Supplementary information:} Supplementary data are available at \textit{Bioinformatics} online.}
+
+\maketitle
+
+\section{Introduction}
+A scientific analysis encompasses multiple steps to transform raw data into information of scientific importance. Collectively, these steps form a workflow where each step performs a definite transformation of the data. These steps are standardised tools and they produce outcomes crucial to visualise scientific processes. Using a workflow for analysing scientific data is simple and convenient because it offers multiple tools as one executable block. A workflow can be saved, shared and used multiple times, which ensures reproducible research. Therefore, workflows are becoming essential in the analysis of scientific data and there are multiple platforms where researchers can create workflows for their analyses (\cite{JeremyLeipzig}; \cite{EwelsP};\cite{Baichoo2018}).
+
+Galaxy is a open-source data processing platform which enables researchers create and store their workflows for multiple scientific analyses (\cite{Afgan}). A workflow in Galaxy is a directed acyclic graph and consists of one or many tool sequences to analyse scientific data such as DNA and RNA sequences. A tool consumes one or more data files as input and produces one or more data files as output and has a defined number of data types for these input and output files. In workflows, the tools are connected one after another following a constraint that the adjacent tools must have compatible data types. In other words, the data types of output files of a tool should match the data types of input files of the following tool. Galaxy has thousands of accessible tools and acquiring familiarity and constructing workflows with these tools can be a complex and time-consuming task, especially for researchers new to Galaxy. To assist them in creating workflows and making them aware of the possible tools for further analyses, a recommender system is devised. The benefits of having such a system are manifold. First, it will avoid the loss of time spent in creating erroneous or less optimal workflows by choosing tools which may be wrong and thereby making researchers more efficient. Second, it will help them bypass the step of searching for tools separately which shows potential to further reduce the time spent in creating workflows and increase the accessibility of tools. Third, it will promote tools having higher usage frequencies in the past to the top of the recommendations and downgrade those having lower usage frequencies to the bottom of the recommendations. It is achieved by assigning weights to tools which are derived from their usage frequencies over a period of time. Finally, it can also be used to promote the newly added tools in Galaxy by showing them alongside the recommended tools predicted using the deep learning approach.
+
+\subsection{Recommender systems}
+The objective of having recommender systems in fields such as scientific literature search, online shopping, travel bookings, media-service providers and many other fields is to let people discover suitable, interesting and the newly-released products. These recommended products are recognised based on the usage and purchasing patterns of people in the past. In the field of scientific literature search, the exponential increase in the number of published papers necessitates having a recommender system to help scientists explore relevant and recent papers quickly (\cite{Gipp2009SciensteinA}). Companies such as Amazon and Netflix have appropriately used recommender systems to learn preferences of their respective customers in selecting products such as their favourite books or movies and to propose a few products out of a large store. It becomes faster for their customers to sift through a few recommended products to find the most suitable ones rather than looking in their complete stores. By enabling their customers discover reasonable and customised products, the recommender systems have helped these companies grow as organisations (\cite{BSmith}; \cite{SGomezUribe}). The successful implementations of recommender systems by many organisations across the world working in diverse areas to assess the needs of their customers in choosing relevant items and to propose the most useful ones motivated us to create a tool recommender system in Galaxy.
+
+\subsection{Related work}
+To simplify creating workflows for scientific analyses a few approaches have been proposed which suggest alternative tools and workflows. (\cite{Palmblad}) makes use of EDAM and semantic annotations of tools to compose workflows automatically for mass-spectrometry based proteomics. The annotations include the names, functionalities, input and output data types of tools. The PROPHETS (Process Realisation and Optimisation Platform using Human-readable Expression of Temporal-logic Synthesis) (\cite{Naujokat}) program generates suitable candidates of workflows which match the goal of the proposed workflow and its annotations. WINGS offers multiple variations of a workflow created using different tools. It makes use of the input parameters, types of datasets and functions of tools to build the variations (\cite{Srivastava2018SemanticWF}). The approach used by (\cite{DiBernardo}) utilises data types to facilitate the automatic creation of workflows. All these approaches depend either on annotations or matching input and output data types of adjacent tools in workflows and they pose challenges such as the addition and maintenance of the meaningful annotations of tools and extracting input and output data types of adjacent tools. Moreover, these approaches have their workflow generation restricted to a few specific bioinformatics analyses such as proteomics or proteogenomics. In addition, they do not discuss the presence of higher-order relationships (\cite{Michalski}) in tool sequences of workflows. Our approach to recommend tools in workflows aims to overcome these challenges in the following manner. First, it does not require storing the metadata of tools. Second, it takes into account the higher-order relationships among tools in the tool sequences. Finally, it incorporates workflows from multiple scientific analyses to train the neural network.
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.25]{bioinformatics_journal/images/hod.png}}
+\caption{An example workflow (a) is shown consisting of 5 different tools which is decomposed into multiple tool sequences shown in (b), (c) and (d). Each tool sequence shows higher-order dependencies where a tool is dependent on all of its prior tools. These dependencies are shown by the dashed arrows.}\label{figure:01}
+\end{figure}
+
+\subsection{Sequential learning on workflows}
+Workflows, created by many researchers in Galaxy for different scientific analyses, are decomposed into numerous tool sequences (figure 1). The sequential nature of these tool sequences where tools are connected one after another inspires us to apply similar learning techniques used for other sequential data such as text and speech. There are multiple studies in the fields of natural language processing, clinical research and speech recognition which apply deep learning techniques on sequential data to obtain good accuracy in predicting future items. (\cite{Yin2017ComparativeSO}) finds context in the long sequences of words for sentiment analysis and part-of-speech tagging using RNN and achieves 85\% and 93\% accuracy, respectively. For clinical data as well, learning on long sequences of health states proves to be beneficial. The health states of patients recorded at different time points are analysed by accessing their electronic health records. The future health states of patients are predicted by training RNN on the sequences of their health states in the past to achieve 85\% accuracy (\cite{Lipton2016a}). Moreover, the variants of RNN are used to model speech and music signals (\cite{ChungGCB14}; \cite{BoulangerLewandowski2012ModelingTD}). These successful studies benefit from the sequential learning techniques using different variants of RNN. Therefore, in our work as well, a variant of RNN (GRU) is used to create the tool recommender system in Galaxy. A Bayesian network can also be used for modeling directed acyclic graphs (workflows) (\cite{KaranBN}; \cite{Spirtes2000ConstructingBN}). It requires computing joint and conditional probabilities of nodes in graphs and an increase in the number of nodes can lead to a higher cost to compute these probabilities. In addition, making predictions by learning a probabilistic network is a hard problem (\cite{Chickering};\cite{Cooper};\cite{Chickering2004}). Because of these drawbacks of using a Bayesian network it is not used in our approach to create the recommender system in Galaxy.
+
+\section{Materials and methods}
+To create a tool recommender system in Galaxy all the workflows are collected from the European Galaxy server. A workflow may have one or many tool sequences where tools are connected one after another. Tool sequences are transformed into matrices and produced as input to a GRU neural network to learn patterns in the connections of tools.
+
+\subsection{Data preparation}
+
+A workflow (figure 1a) is divided into smaller tool sequences (figure 1b, 1c and 1d). The last tool, shown in green, of each tool sequence (of length n) is assigned as the label of the sub-sequence (of length n-1) shown in blue (figure 1). A label is an output which is learned and predicted by the recommender system. In the neural network learning, a tool is a label. For example, in figure 1b, Tools D and E are the labels of the sub-sequence Tool A $\rightarrow$ Tool B $\rightarrow$ Tool C. They show higher-order dependencies in their connections which implies that a tool is not only dependent on its immediate predecessor but also on all prior tools in the tool sequence. For example, in figure 1c, the Tool C is dependent on Tools B and A. By analysing multiple workflow fragments in this way the neural network should learn that the label of a tool sequence Tool A $\rightarrow$ Tool B is Tool C. It is expected that dividing a tool sequence into fragments with a minimum length of two tools, as shown in figure 1c and 1d, will improve the generalisation performance of the neural network because it gets more tool sequences with a variety of lengths to learn from. The dependencies shown in figure 1b, 1c and 1d present in tool sequences are learned using the GRU neural network by modeling the conditional probability given by equation 1 (\cite{Xue1600028}). The probability of a tool ($x_T$) is estimated given all other prior tools ($x_1$, $...$, $x_{T-1}$) for a tool sequence ($x_1$, $...$, $x_{T-1}$, $x_{T}$). The neural network learning is classification because there are labels for tool sequences which are learned and then predicted. Moreover, the classification is multi-class (multiple tools as labels) and multi-label (multiple tools as labels for a tool sequence) (\cite{Tsoumakas07multi-labelclassification}). To ensure an unbiased learning and evaluation by the neural network, the set of tool sequences is divided into two parts - training and test. The training data is used for learning a model and the test data is used for evaluating the model.
+
+\begin{equation}
+p(x_T|x_1,x_2,....,x_{T-1})
+\end{equation}
+
+\subsection{Relevance of tools}
+The tools in Galaxy have different usage patterns. Some tools are used more often than other tools for multiple reasons such as differences in their functions and availability of similar but better tools. It is essential to analyse the usage patterns of tools because the recommender system proposes tools for researchers and these tools should have high relevance to their analyses. One of the key indicators of relevance of tools can be their high usage frequencies. If a tool has been used often in the recent past, it confirms that the tool is relevant. However, if a tool was used often a few years ago but is being used less often in the last six months then the relevance of that tool has certainly declined. The usage frequencies of tools, shown as labels in figure 1, over the past year are shown in figure 2. To incorporate this usage based relevance of tools in the recommender system, the usage frequencies of all the tools used in the last one year have been collected and are used in the neural network training as the weights (logarithm of usage frequencies) of tools. A tool which has been used often (for example Tool B in figure 2) in the past one year is assigned a higher weight than a tool (for example Tool C in figure 2) which has been used less often in the past one year. When tools are recommended a score is assigned to each tool by the neural network. It is expected that a tool with higher weight gets a higher score and a tool with a lower weight get a lower score. To summarise, the relevance of a tool to be used in a workflow decays if its usage drops over time in Galaxy. Alternatively, the relevance of tools can also be ascertained by counting the occurrence of each tool in all workflows and these occurrences can be used as their weights in the neural network training. It may happen that some tools which were used often in the past to create workflows are not used anymore. Therefore, assigning weights to these tools in the neural network training based on their occurrences in workflows may not be a good indicator of their relevance and overall, may not be optimal.
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.17]{bioinformatics_journal/images/usage_tools.png}}
+\caption{The plot shows the usage frequencies of 4 tools collected over past one year. The Tools B and D have high usage frequencies almost every month while the Tools C and E have much lower usage frequencies compared to Tools B and D.}\label{figure:02}
+\end{figure}
+
+\subsection{Implementation}
+Tool sequences extracted from workflows are transformed into vectors because neural networks require input data to be represented as vectors and matrices. Each tool sequence has one or more labels (figure 1) and they are transformed into different vectors - a tool sequence vector (figure 3b) and a label vector (figure 3d). To form these vectors a dictionary of tools is needed which stores an index for each tool. Using the indices of tools a tool sequence vector is created preserving the original order of tools as in the tool sequence. For example, Tool A has an index of "12" in the dictionary, therefore it is replaced by "12" in the vector (figure 3b). The vector is padded with trailing zeros to keep the length of the vector same across the varying lengths of tool sequences. The size of this vector is 25 which means that a tool sequence can have a maximum of 25 tools. The tool sequences larger than this size are discarded. The labels (figure 3c) are transformed into a bit vector (figure 3d) in which the positions, stored as indices in the dictionary of tools, of the labels (tools) are turned "on" (set to 1) specifying that these tools are the labels of the tool sequence and others are not (set to 0). It has the same size as the dictionary of tools. In machine learning field, it is also known as multi hot-encoded vector. Together, these two vectors form a training sample for the neural network. A pair of vectors are created in this manner for each tool sequence and for all the tool sequences they are combined to form two matrices - one for tool sequences and another for their respective labels. These matrices form input data to the neural network which learns patterns of connections in tool sequences and maps them to their respective labels during training.
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.25]{bioinformatics_journal/images/label_vec.png}}
+\caption{The figure shows how a tool sequence and its labels are transformed into vectors.}\label{figure:03}
+\end{figure}
+
+\subsubsection{Neural network architecture} 
+GRU, a variant of RNN, is used for creating a model which recommends tools. The neural network architecture has four different components (layers) serving different purposes (figure 4).
+
+\paragraph*{Embedding layer:}
+The first component of the neural network architecture is an input layer (figure 4) which learns an embedding, a fixed-size vector, for each tool. This vector is used by the neural network as an internal representation of a tool. The embedding vector replaces the tool\'s index in each tool sequence. The size of the embedding vector is fixed for all tools. For example, the vector of a tool sequence [12, 6, 75, 0, 0, ..., 0] is transformed into [[0.3, 0.01, 0.003, ..., 0.23], [0.5, 0.1, 0.005, ..., 0.9], [...], 0, 0, ...,0] by the embedding layer. The same embedding vector represents a tool in all tool sequences in which the tool is present.
+
+\paragraph*{GRU layer:}
+The stacked layers of GRU learn deeper structures in the tool sequences by modeling the conditional probabilities of tools (labels) given all other prior tools (figure 4). GRU has certain advantages which helps it to learn on sequential data. First, it avoids the problems of vanishing and exploding gradients which commonly occur in traditional RNN (\cite{Pascanu2012UnderstandingTE}). It is important because learning higher-order dependencies depends on the gradients of errors concerning the parameters (recurrent and input weight matrices) of GRU layers. Second, GRU has slightly fewer parameters than the long short-term memory network (LSTM), another variant of RNN, which makes using GRU simpler than LSTM. Finally, it achieves similar accuracy as the LSTM (\cite{ChungGCB14}).
+
+\paragraph*{Output layer:}
+The last component of the neural network architecture is a dense layer which computes the predictions (figure 4). The dimension of this layer is equal to the number of unique tools because it predicts a score for each tool (label). The predicted score of each tool is considered as its probability of being the label of an input tool sequence. The closer the predicted score of a tool is to 1, the more probable it is to be the recommended tool and the closer it is to 0, the less probable it is to be the recommended tool.
+
+\paragraph*{Dropout layer:}
+Overfitting happens when a neural network performs exceptionally well on the training data but its performance on test (unseen) data remains poor. To prevent it dropout is used between two layers of the neural network. It works by setting some randomly chosen connections in the neural network to 0 (\cite{Zaremba2014RecurrentNN}; \cite{Gal:2016:TGA:3157096.3157211}). 3 dropout layers are used in our approach - one between the embedding and the first GRU layers, one between 2 GRU layers and the last one between the second GRU and dense layers.
+
+\paragraph*{Activations:}
+They are mathematical functions which are used in neural networks to transform inputs to a layer into its outputs. Two activations are used in this work - one is exponential linear units (ELU) (\cite{Clevert}) and another is sigmoid (equation 2). ELU is used for both the GRU layers and has a special feature of being negative when the input is negative which allows mean activation (output) to get closer to 0 compared to other activation functions such as ReLU (\cite{NairRLU}) which is always positive. As mean activations get closer to 0, the approximated and actual gradients get closer to each other. Therefore, using ELU in our neural network as an activation can be useful to achieve faster training and an increased drop in loss and better accuracy. Sigmoid is used in the output layer which normalises any real number to lie between 0 and 1 and it is considered as a probability of each tool.
+
+\begin{equation}
+f(x) = \frac{1}{1 + e^{-x}}
+\end{equation}
+
+\paragraph*{Usage frequencies of tools as weights:}
+To ensure that the relevance of tools decays with time if they have not been used regularly in the recent past, their usage frequencies are used as their respective weights in the neural network training. The usage frequencies of tools over last 1 year (figure 2) have been collected from Galaxy. A curve is fit through the usage frequencies of each tool using support vector regression (SVR) to display a trend of the tool\'s usage over time. Using this trend, the usage of the tool for the next month is predicted and its logarithm is used as the weight for this tool. The logarithm of usage frequencies is computed to normalise them because only a few tools have significantly large magnitude of usage compared to that of the remaining tools which may lead the neural network to learn and predict only tools with very large magnitude of usage and ignore other tools. Learning a trend for each tool involves 5-fold cross-validation and optimising two hyperparameters of SVR, kernel and degree, using grid search. The values used for the kernel are - "rbf", "poly" and "linear" and the values of degree used are 2 and 3. By following the grid search, there are 3 (kernels) x 2 (degrees) = 6 different combinations of hyperparameters to be verified to find the best curve for each tool (\cite{scikitlearn}).
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.25]{bioinformatics_journal/images/gru_architecture.png}}
+\caption{The image shows the architecture of the GRU neural network. It has four components as layers. The first layer is the input layer (yellow), two stacked layers of GRU (cyan) and the last layer is the output layer (violet). The dropout layers are added between two other layers.}\label{figure:03}
+\end{figure}
+
+\paragraph*{Loss function:}
+A neural network learns patterns from data by minimising a loss function. Cross-entropy is a popular choice for a loss function in classification problems (\cite{Janocha2017OnLF}). In our approach cross-entropy function is used in the GRU neural network to compute the loss between the true and predicted label and is weighted by the label's weight. The loss is summed up over all labels of a tool sequence and then averaged (equation 3). The term $T$ is the total number of labels (size of the label bit vector). The term $w_i$ is the weight of the $i^{th}$ label. The terms $p^a$ and $p^b$ refer to the true and predicted label vectors for a tool sequence, respectively. In general, the loss is large when $p^a$ and $p^b$ are far away from each other which means that the learning by the neural network is not good. If they are close the loss is low and the predictions are better. When an unweighted cross-entropy is used as the loss function for any classification problem (\cite{Sadowski}) then it is assumed that all the predictions have the same weight and it does not differentiate between the more and less dominant labels. In our approach when it is used as a loss function in the neural network, then even though the predicted labels are correct they may not necessarily have large weights and thereby maybe less relevant. Therefore, to reduce the possibility of less relevant labels appearing in recommendations, loss is weighted by the weights of labels. It ensures that if a label with a larger weight is misclassified, which means that the true and predicted values are different, then the overall loss is higher. In this way, the wrong classification of labels with a larger weight is penalised more than the wrong classification of labels with a smaller weight.
+
+\begin{equation}
+- \frac{1}{T} \sum_{i=1}^{T} (p_{i}^a \cdot \log(p^{b}_{i}) + (1 - p_{i}^a) \cdot \log(1 - p^{b}_{i})) * w_i
+\end{equation}
+
+The loss in equation 3 is computed for all tool sequences in training data and is minimised using a root mean square propagation (RMSProp) optimiser. It follows an adaptive approach to estimate the learning rate by keeping knowledge of gradients in prior iterations. The learning rate is updated by dividing it with an average of the square of the prior gradients (\cite{RuderS}).
+
+\paragraph*{Hyperparameter tuning:}
+A neural network has multiple hyperparameters. In our approach they are the number of dimensions of embedding layer, learning and dropout rates, number of units for GRU layer and size of batches. They should be optimised to find the best configuration (a combination of hyperparameters) for training on tool sequences as a different configuration may give a different performance on the same training data. The grid and random searches are popular techniques to optimise hyperparameters. One limitation of these approaches is that they evaluate each configuration independently and have a high time-complexity to find the best configuration. Therefore, the hyperparameters in this work are optimised using a Bayesian (sequential model-based) optimisation (\cite{Bergstra2013}). It learns from the previously evaluated configurations which ensures faster convergence. Reasonable ranges of all the hyperparameters to be optimised are given and the best configuration is found after 30 evaluations.
+
+\subsubsection{Learning}
+The neural network learns patterns in the tool sequences from the training data and creates a model. The ability of the model to recommend tools is evaluated on the test data which is unseen by the neural network during training. While learning, the complete training data is divided into batches of equal size and the weights (belonging to multiple layers of the neural network) are learned in iterations. All these iterations together make an epoch when all the tool sequences in the training data have been used for learning. The number of tool sequences extracted from workflows is approximately 200,000. The training data forms 80\% of all tool sequences and it is iterated over 10 epochs of neural network training. The remaining 20\% is used as the test data. The running time of the training is approximately 50 hours on Intel(R) Xeon(R) CPU provided by a high performance computing cluster (https://wiki.bwhpc.de/e/bwUniCluster) with single core.
+
+\subsubsection{Predictions}
+Learning on training data using a neural network creates a model to predict tools and each tool gets a probability score of being the recommended tool of a tool sequence. The predictions are sorted in the descending order of their probabilities and the top ones (with the highest probabilities) are shown as recommendations. Top-k precision (precision@k) is a popular metric for evaluating a recommender system (\cite{Said2013ATR};\cite{Kang}; \cite{Deshpande}). Precision@k implies how many in the $k$ predicted tools are correct. For example, $k=3$ implies that the number of predicted tools are 3 with the highest predicted scores. If only 2 of them are correct, then the precision@3 is $\frac{2}{3} = 0.66$. In this way, prediction@3 is computed for all the tool sequences in the test data and then averaged to get an overall precision@3. Precision@1 (top-1), precision@2 (top-2) and precision@3 (top-3) metrics are used in this approach to evaluate the quality of the tool recommender system.
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.19]{bioinformatics_journal/images/precision.png}} \caption{The subplots (a), (b), (c) and (d) show the top-k precision for the dense neural network, CNN, GRU neural network with cross-entropy losses and GRU neural network with the weighted cross-entropy loss, respectively computed on test data over 10 training iterations. The shaded regions in the subplots show the standard deviation of the top-k precision computed using 10 experiment runs within one standard deviation above and below the average.}\label{figure:04}
+\end{figure}
+
+\subsubsection{Comparison of GRU to other networks}
+The performance of GRU neural network is compared with two different neural network architectures - convolutional neural network (CNN) and dense neural network (with only dense layers). In both these architectures, the embedding layer is used as the first (input) layer and a dense layer is used as an output layer having the same dimensions as the number of tools. In CNN, convolutional and max-pooling layers are used to learn spatial patterns in tool sequences and downsample the dimensionality of input, respectively. Moreover, two dense layers are also used and the last one is an output layer. The dense neural network uses two dense layers as hidden layers. The cross-entropy is used as the loss function in these architectures. The GRU neural network with cross-entropy loss function is also used to compare its performance with GRU neural network with weighted cross-entropy loss function to observe the performance of the weighted loss function. In all these architectures, RMSProp is used as an optimiser and hyperparameter tuning is used to optimise their parameters.
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.19]{bioinformatics_journal/images/usage.png}} \caption{The subplots (a), (b), (c) and (d) show the mean usage frequency (log) for the dense neural network, CNN, GRU neural network with cross-entropy losses and GRU neural network with the weighted cross-entropy loss, respectively computed on test data over 10 training iterations. The shaded regions in the subplots show the standard deviations of the usage frequencies (log) computed using 10 experiment runs within one standard deviation above and below the average.}\label{figure:04}
+\end{figure}
+
+\subsubsection{Library and model}
+The Keras deep learning library is used for producing the neural network architectures (\cite{chollet2015keras}). The trained model is saved as an H5 file to simplify its distribution to different Galaxy instances. The file is an HDF5 store containing the weights of different layers of the neural network and their configurations, a dictionary of tools and their indices and the weights of tools. The weights and configuration of the neural network are needed to recreate the trained model. The dictionary is used to replace IDs of the predicted tools by their indices in the tool sequence.
+
+\section{Results}
+The models obtained after training all the neural network architectures are used to predict tools for the tool sequences in the test data after every training iteration. The precision and usage frequencies of the predicted tools for top-1, top-2 and top-3 metrics are computed over 10 training iterations for each experiment run. They are averaged and their respective standard deviations are computed over 10 experiment runs (figures 5 and 6). The GRU neural network with the weighted cross-entropy loss function performs the best and achieves 98\% precision as compared to the performances of the CNN and dense neural network architectures which achieve 95\% precision for top-1, top-2 and top-3 metrics (figure 5). In addition, it achieves better precision and higher usage frequencies of the predicted tools than the same GRU neural network but with cross-entropy loss function (figure 5c). Therefore, it appears that the weighted cross-entropy loss function drives the GRU neural network to learn better structures in the tool sequences which generalises robustly to the unseen tool sequences (test data). Its higher precision (figure 5d) compared to the dense neural network (figure 5a) proves that the GRU layers in a neural network are better for learning on sequential data than the dense layers. Moreover, it shows the least divergence in precision and usage frequencies compared to all other architectures shown as the shaded regions in figures 5 and 6. These observations establish that its learning is stable over multiple experiment runs. The dense neural network achieves the highest values (figure 6a) of usage frequencies of the predicted tools but, at the same time, it also shows a higher divergence in precision and usage frequencies over multiple experiment runs.
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.19]{bioinformatics_journal/images/loss.png}} \caption{The subplots (a), (b), (c) and (d) show the losses for the dense neural network, CNN, GRU neural network with cross-entropy losses and GRU neural network with the weighted cross-entropy loss, respectively computed on training and test data over 10 training iterations. The shaded regions in the subplots show the standard deviations of the losses computed using 10 experiment runs within one standard deviation above and below the average.}\label{figure:04}
+\end{figure}
+
+The losses (on training and test data) incurred by the different neural network architectures are also computed for 10 training iterations in each experiment run and the average and standard deviations are computed over 10 experiment runs (figure 7). Again, the GRU neural network with the weighted cross-entropy loss function shows the least divergence in losses as compared to the other neural networks. For this architecture, the losses computed on the training and test data overlap each other (figure 7d) while in all other neural network architectures (figure 7a, 7b and 7c), the training and test losses are not close to each other. Therefore, it can be concluded that the learning on tool sequences in not stable for these architectures. To illustrate the real-time usage of the recommender system in Galaxy, two examples have been provided - one shows recommended tools for a tool sequence with 3 tools, Trimmomatic $\rightarrow$ Bowtie2 $\rightarrow$ FreeBayes in the workflow editor of Galaxy (figure 8) and another displays recommended tools after the execution of RNA-star tool (figure 9).
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.30]{bioinformatics_journal/images/workflow.png}} \caption{The image shows recommended tools in the workflow editor of Galaxy. The recommended tools can be seen in a modal popup after clicking on the right arrow button placed in top-right corner of each tool. Clicking on any of the recommended tool opens a new block for that tool which can be connected to the tool sequence.}\label{figure:04}
+\end{figure}
+
+\begin{figure}
+\centerline{\includegraphics[scale=0.25]{bioinformatics_journal/images/tool-exe.png}} \caption{The image shows recommended tools as the leaves (on the right) of the tree after the execution of RNA-star tool. Clicking on any recommended tool opens its definition in Galaxy and can be used for further analysis with the data files produced by the previous tool (RNA-star).}\label{figure:04}
+\end{figure}
+
+\section{Discussion}
+A recommender system to predict tools in Galaxy is built by analysing workflows using a variant of RNN (GRU) and a weighted cross-entropy loss function. The recommended tools are relevant for multiple scientific analyses with a high accuracy, are easily accessible through simple UI integrations and together, they improve user experience by helping researchers to easily create correct workflows. Moreover, the approach does not need to store any metadata of tools and the recommendations are made by only learning the patterns of tool connections in workflows. The model created using this approach is integrated into Galaxy\'s European server (https://usegalaxy.eu/) to show recommended tools to researchers. An API (https://github.com/usegalaxy-eu/galaxy/blob/
+release\_19.05\_europe/lib/galaxy/webapps/
+galaxy/api/workflows.py\#L606) is provided, residing with other Galaxy APIs, to access a tool or a tool sequence specified by researchers to show its recommendations in real-time. The API is used at two different places in Galaxy - one shows recommendations in the workflow editor and another shows them after each tool execution. The list of recommended tools are sorted in decreasing order of their (predicted) scores. These scores are positive real numbers and are computed independently of one another by the GRU neural network. To make these scores more meaningful, they are normalised by dividing each tool\'s predicted score by the maximum predicted score.
+
+On a usual Galaxy server the workflows and tools are dynamic, as new tools and workflows are added regularly. Therefore, it is important to train the GRU neural network on the complete set of workflows periodically to keep the tool recommendation model updated with the latest tools and workflows. This model can be created using the set of workflows and tools on a local Galaxy instance by following the steps mentioned in the repository (https://github.com/anuprulez/
+similar\_galaxy\_workflow/tree/tool\_recommendation\_release\_19\_09). A script ("extract\_data.sh") is provided for collecting raw data from a Galaxy instance. These are input datasets - one contains workflows and another contains usage frequencies of tools. The sample input datasets are also provided with the scripts. There is a config file ("config.xml") which can be used to alter the values of multiple hyperparameters of the neural network, number of training iterations and sizes of training and test data. To execute the scripts on a GPU enabled machine, the "tensorflow-gpu" package should be installed instead of "tensorflow" as mentioned in the conda package dependencies file ("environment.yml"). Alternatively, a Galaxy tool is also available to create this model which can be executed directly on Galaxy. This simplifies the creation of a model by providing a UI where the parameters pertaining to the datasets and GRU neural network can be changed. To see recommended tools, an ipython script ("tool\_recommendation.ipynb") is also provided which predicts tools for a tool or a tool sequence. A Galaxy admin can overwrite the recommended tools predicted using the trained model by a different set of tools using the Galaxy API which can be beneficial to highlight newly added tools.
+
+\section{Acknowledgements}
+We thank Simon Bray and Wolfgang Maier for providing feedback. We thank Helena Rasche for providing the data and deploying it on Galaxy European server.
+
+\section{Funding}
+
+\begin{thebibliography}{}
+
+\bibitem[Afgan {\it et~al}., 2018]{Afgan}
+Afgan, E. {\it et~al}. (2018) The Galaxy platform for accessible, reproducible and collaborative biomedical analyses: 2018 update, {\it Nucleic Acids Research}, 46(W1):W537-W544.
+
+\bibitem[Baichoo {\it et~al}., 2018]{Baichoo2018}
+Baichoo, S. {\it et~al}. (2018), Developing reproducible bioinformatics analysis workflows for heterogeneous computing environments to support African genomics, {\it {BMC} Bioinformatics} 19, Article number 457.
+
+\bibitem[Gipp {\it et~al}., 2009]{Gipp2009SciensteinA}
+Bela, G. {\it et~al}. (2009) Scienstein: A Research Paper Recommender System, {\it Conference Proceedings}.
+
+\bibitem[Bergstra {\it et~al}., 2013]{Bergstra2013} Bergstra, J. {\it et~al}. (2013) Hyperopt: A Python Library for Optimizing the Hyperparameters of Machine Learning Algorithms, {\it 12th PYTHON IN SCIENCE CONF. (SCIPY 2013)}, 2013.
+
+\bibitem[Boulanger-Lewandowski {\it et~al}., 2012]{BoulangerLewandowski2012ModelingTD} Boulanger-Lewandowski, N. {\it et~al}. (2012) Modeling Temporal Dependencies in High-Dimensional Sequences: Application to Polyphonic Music Generation and Transcription, {\it ICML}, 2012.
+
+\bibitem[Chickering, 1996]{Chickering} 
+Chickering, D. M. (1996) Learning Bayesian Networks is NP-Complete, Lecture Notes in Statistics, {\it Springer}, volume 112, pp 121--130, 1996.
+
+\bibitem[Chickering {\it et~al}., 2004]{Chickering2004} 
+Chickering, D. M. {\it et~al}. (2004) Large-Sample Learning of Bayesian Networks is NP-Hard, {\it Journal of Machine Learning Research}, volume 5, pp. 1287--1330, 2004.
+
+\bibitem[Chollet {\it et~al}., 2015]{chollet2015keras}
+Chollet, F. {\it et~al}., Keras, 2015.
+
+\bibitem[Chung {\it et~al}., 2014]{ChungGCB14} 
+Chung, J. {\it et~al}. (2014) Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling, {\it CoRR}, 2014.
+
+\bibitem[Clevert {\it et~al}., 2015]{Clevert} 
+Clevert, D. {\it et~al}. (2015) Fast and accurate deep network learning by exponential linear units (elus), {\it ICLR 2016}, 2015.
+
+\bibitem[Cooper, 1990]{Cooper} 
+Cooper, G. F. (1990) The computational complexity of probabilistic inference using bayesian belief networks, {\it Artificial Intelligence}, Volume 42, Issues 2--3, March 1990, Pages 393--405, 1990.
+
+\bibitem[Deshpande {\it et~al}., 2004]{Deshpande} 
+Deshpande, M. and Karypis, G. (2004) Item-Based Top-N recommender Algorithms, {\it ACM Transactions on Information Systems}, Volume 22, Issue 1, pp. 143--177, 2004.
+
+\bibitem[DiBernardo {\it et~al}., 2014]{DiBernardo}
+DiBernardo, M. {\it et~al}. (2014) Semi-automatic web service composition for the life sciences using the biomoby semantic web framework, {\it Journal of Biomedical Informatics}, Volume 41, pp. 837– 847, 2014.
+
+\bibitem[Ewels {\it et~al}., 2016]{EwelsP}
+Ewels, P. {\it et~al}. (2016) Cluster Flow: A user-friendly bioinformatics workflow tool. {\it F1000Res}, 2016;5:2824.
+
+\bibitem[Gal {\it et~al}., 2016]{Gal:2016:TGA:3157096.3157211} 
+Gal, Y. and Ghahramani, Z. (2016) A Theoretically Grounded Application of Dropout in Recurrent Neural Networks, {\it Proceedings of the 30th International Conference on Neural Information Processing Systems}, pp. 1027--1035, 2016.
+
+\bibitem[Janocha {\it et~al}., 2017]{Janocha2017OnLF} 
+Janocha, K. and Czarnecki, W. {\it et~al}. (2017) On Loss Functions for Deep Neural Networks in Classification, {\it ArXiv}, 2017.
+
+\bibitem[Xu {\it et~al}., 2016]{Xue1600028} 
+Jian, X. {\it et~al}. (2016) Representing higher-order dependencies in networks, {\it Science Advances}, volume 2, number 5, 2016.
+
+\bibitem[Karan {\it et~al}., 2016]{KaranBN} 
+Karan, S. and Zola, J. (2016) Exact structure learning of Bayesian networks by optimal path extension, {\it 2016 IEEE International Conference on Big Data (Big Data)}, pp. 48--55, 2016.
+
+\bibitem[Kang {\it et~al}., 2016]{Kang} 
+Kang, Z. {\it et~al}. (2016) Top-N Recommender System via Matrix Completion, {\it Proceedings of the Thirtieth AAAI Conference on Artificial Intelligence (AAAI-16)}, 2016.
+
+\bibitem[Leipzig {}, 2017]{JeremyLeipzig}
+Leipzig, J. (2017) A review of bioinformatic pipeline frameworks, {\it Brief Bioinform}, 18(3): 530--536.
+
+\bibitem[Lipton {\it et~al}., 2015]{Lipton2016a} 
+Lipton, Z. C. {\it et~al}. (2015) Learning to diagnose with LSTM recurrent neural networks, {\it CoRR}, 2015.
+
+\bibitem[Michalski {\it et~al}., 2014]{Michalski}
+Michalski, V. {\it et~al}. (2014) Modeling sequential data using higher-order relational features and predictive training, {\it CoRR}, 2014.
+
+\bibitem[Nair {\it et~al}., 2010]{NairRLU} 
+Nair, V. and Hinton, G. E. (2010) Rectified Linear Units Improve Restricted Boltzmann Machines, {\it Proceedings of the 27th International Conference on International Conference on Machine Learning}, pp. 807--814, 2010.
+
+\bibitem[Naujokat {\it et~al}., 2012]{Naujokat}
+Naujokat, S. {\it et~al}. (2012) Loose Programming with PROPHETS, Fundamental Approaches to Software Engineering, {\it Springer Berlin Heidelberg} (2012): 94--98.
+
+\bibitem[Palmblad {\it et~al}., 2019]{Palmblad}
+Palmblad, M. {\it et~al}. (2019) Automated workflow composition in mass spectrometry-based proteomics, {\it Bioinformatics}, Volume 35, 4 (2019): 656--66.
+
+\bibitem[Pascanu {\it et~al}., 2012]{Pascanu2012UnderstandingTE} 
+Pascanu, R. {\it et~al}. (2012) Understanding the exploding gradient problem, {\it ArXiv}, 2012.
+
+\bibitem[Pedregosa {\it et~al}., 2011]{scikitlearn} 
+Pedregosa, F. {\it et~al}. (2011) Scikit-learn: Machine Learning in {P}ython, {\it Journal of Machine Learning Research}, vol. 12, pp. 2825--2830, 2011.
+
+\bibitem[Ruder, 2016]{RuderS} 
+Ruder, S. (2016) An overview of gradient descent optimization algorithms, {\it ArXiv}, 2016.
+
+\bibitem[Sadowski, 2016]{Sadowski} 
+Sadowski, P. (2016) Notes on Backpropagation, {\it Department of Computer ScienceUniversity of California Irvine}, 2016.
+
+\bibitem[Said {\it et~al}., 2013]{Said2013ATR} 
+Said, A. {\it et~al}. (2013) A Top-N Recommender System Evaluation Protocol Inspired by Deployed Systems, 2013.
+
+\bibitem[SGomez-Uribe {\it et~al}., 2016]{SGomezUribe}
+SGomez-Uribe, C.A. {\it et~al}. (2016), The Netflix Recommender System: Algorithms, Business Value, and Innovation, {\it {ACM} Transactions on Management Information Systems {TMIS}}, Volume 6 Issue 4, Article No. 13.
+
+\bibitem[Smith {\it et~al}., 2017]{BSmith}
+Smith, B. and Linden, G. {\it et~al}. (2017) Two Decades of Recommender Systems at Amazon.com, {\it {IEEE} Internet Computing}, Volume 21 Issue 3, Pages 12--18.
+
+\bibitem[Spirtes {\it et~al}., 2000]{Spirtes2000ConstructingBN} 
+Spirtes, P. {\it et~al}. (2000) Constructing Bayesian Network Models of Gene Expression Networks from Microarray Data, {\it Research Showcase @ CMU}, 2000.
+
+\bibitem[Srivastava {\it et~al}., 2018]{Srivastava2018SemanticWF}
+Srivastava, A. {\it et~al}. (2018), Semantic workflows for benchmark challenges: Enhancing comparability, reusability and reproducibility, {\it PSB} (2018).
+
+\bibitem[Tsoumakas {\it et~al}., 2007]{Tsoumakas07multi-labelclassification} Tsoumakas, G. and Katakis, I. (2007) Multi-label classification: An overview, {\it International Journal of Data Warehousing and Mining}, pp. 1--13, 2007.
+
+\bibitem[Yin {\it et~al}., 2017]{Yin2017ComparativeSO} 
+Yin, W. {\it et~al}. (2017) Comparative Study of {CNN} and {RNN} for Natural Language Processing, {\it ArXiv}, 2017.
+
+\bibitem[Zaremba {\it et~al}., 2014]{Zaremba2014RecurrentNN} 
+Zaremba, W. {\it et~al}. (2014) Recurrent Neural Network Regularization, {\it ArXiv}, 2014.
+
+\end{thebibliography}
+\end{document}
